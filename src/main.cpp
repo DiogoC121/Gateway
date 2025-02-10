@@ -1,151 +1,273 @@
-
-#include"../lib/defines.h"
-#include <Arduino.h>
 #include <SPI.h>
-///#include"../lib/nrf24l01.h"
 #include <nRF24L01.h>
 #include <RF24.h>
-#include <Wire.h>
-#include <heltec.h>
+#include "HT_SSD1306Wire.h"
+
+// Inicializa o objeto SSD1306Wire para o display OLED da Heltec V2 LoRa
+// Endereço I2C: 0x3C, Pinos SDA: 4, SCL: 15
+// Endereço de comunicação (deve ser o mesmo no dispositivo)
+const byte address[6] = "00001";
+//const byte address[5] = {0x52, 0x52, 0xE1, 0xAB, 0x12}; // "node3"
 
 #define BUTTON_PIN    13
-#define CE_PIN        5
-#define CSN_PIN       4
-#define IRQ_PIN       15 
+#define LED_PIN       25 
+#define CE_PIN        12
+#define CSN_PIN       17
+#define IRQ_PIN       2 
+#define nrsck         5
+#define nfmiso        19
+#define nrmosi        23
 
-RF24 radio(CE_PIN, CSN_PIN); // Cria o objeto radio
-
-const byte address[6] = {
-                            (ADDRESS >> 32) & 0xFF, // Byte 0: 0x52
-                            (ADDRESS >> 24) & 0xFF, // Byte 1: 0x52
-                            (ADDRESS >> 16) & 0xFF, // Byte 2: 0xE1
-                            (ADDRESS >> 8) & 0xFF,  // Byte 3: 0xAB
-                            ADDRESS & 0xFF,         // Byte 4: 0x12
-                            0x00                    // Byte 5: 0x00
-                        };                          // Endereço para comunicação
+static SSD1306Wire  display(0x3c, 500000, SDA_OLED, SCL_OLED, GEOMETRY_128_64, RST_OLED); // addr , freq , i2c group , resolution , rst
 
 volatile bool dataReceived = false; // Flag para indicar que dados foram recebidos
 unsigned long buttonPressTime = 0;
 bool buttonActive = false;
 bool longPressActive = false;
 
-void IRAM_ATTR handleIRQ() {
-  dataReceived = true; // Sinaliza que há dados recebidos
+// Array para armazenar os dados recebidos
+uint16_t receivedData[30] = {0};
+
+// Inicializa o objeto RF24
+RF24 radio(CE_PIN, CSN_PIN);
+
+void VextON(void)
+{
+  pinMode(Vext,OUTPUT);
+  digitalWrite(Vext, LOW);
+}
+
+void VextOFF(void) //Vext default OFF
+{
+  pinMode(Vext,OUTPUT);
+  digitalWrite(Vext, HIGH);
 }
 
 void setup() {
-  Heltec.begin(true /*DisplayEnable Enable*/, false /*LoRa Disable*/, true /*Serial Enable*/);
+  Serial.begin(115200); // Inicializa a comunicação serial com uma taxa de 115200 bps
+
+  pinMode(LED_PIN, OUTPUT); // Configura o pino do LED como saída
+  digitalWrite(LED_PIN, LOW); // Inicia com o LED apagado
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP); // Configura o pino do botão como entrada com pull-up
   
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-  pinMode(IRQ_PIN, INPUT_PULLUP); // Configura o pino IRQ como entrada com pull-up
+  // Configura a interrupção no pino IRQ_PIN para detectar borda de descida
+ // attachInterrupt(digitalPinToInterrupt(IRQ_PIN), handleIRQ, FALLING);
+
+  // Configura a interrupção no pino BUTTON_PIN para detectar mudanças de estado
+  //attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonPress, FALLING);
+  VextON();
+  delay(100);
+
+  // Inicializa o display
+  display.init();
+  //display.flipScreenVertically(); // Inverte a tela se necessário
+  display.screenRotate(ANGLE_90_DEGREE);
+  display.setFont(ArialMT_Plain_10); // Define a fonte
+  display.setBrightness(200); // Brilho máximo (0 a 255)
+  display.drawString(0, 0, "Dispositivo");
+  display.drawString(0, 10, "Gateway");
+  display.drawString(0, 20, "TCC - Diogo");
+  display.drawString(0, 30, "Correia da");
+  display.drawString(0, 40, "Silva - UnB");
+  display.drawString(0, 50, "15/0058641");
+  display.display();
+
+// Escreve no monitor serial
+  Serial.println("Dispositivo Gateway");
+  Serial.println("TCC - Diogo Correia da Silva");
+  Serial.println("15/0058641");
+  Serial.println("UnB - FCTE - FGA");
+
+  delay(3000);
   
-  if (!radio.begin()) {
-    Heltec.display->clear();
-    Heltec.display->drawString(0, 0, "NRF24L01 failed!");
-    Heltec.display->display();
-    while (1);
+  SPI.begin(nrsck, nfmiso, nrmosi);
+
+  // Inicializa o NRF24L01
+  initNRF24L01();
+}
+void loop() {
+  
+  digitalWrite(LED_PIN, LOW);  // Apaga o LED
+  // Limpa o display
+  display.clear();
+  
+  display.screenRotate(ANGLE_90_DEGREE);
+  display.setFont(ArialMT_Plain_10); // Define a fonte
+  display.setBrightness(200); // Brilho máximo (0 a 255)
+
+ //Exibe 12 linhas de texto, cada uma com uma letra
+ display.drawString(0, 0, "Accel X: ");  // Linha 1
+ display.drawString(0, 10, "Accel Y: "); // Linha 2
+ display.drawString(0, 20, "Accel Z: "); // Linha 3
+ display.drawString(0, 30, "Gyro X: "); // Linha 4
+ display.drawString(0, 40, "Gyro Y: "); // Linha 5
+ display.drawString(0, 60, "Mag X: "); // Linha 7
+ display.drawString(0, 70, "Mag Y: "); // Linha 8
+ display.drawString(0, 80, "Mag Z: "); // Linha 9
+ display.drawString(0, 90, "Temp NTC: "); // Linha 10
+ display.drawString(0, 100, "Bateria: "); // Linha 11
+ display.drawString(0, 110, "SG X:  Y:  Z: "); // Linha 12
+
+  // Atualiza o display com o conteúdo desenhado
+  display.display();
+
+  // Escreve no monitor serial
+  Serial.println("Accel X: ");  // Linha 1
+  Serial.println("Accel Y: "); // Linha 2
+  Serial.println("Accel Z: "); // Linha 3
+  Serial.println("Gyro X: "); // Linha 4
+  Serial.println("Gyro Y: "); // Linha 5
+  Serial.println("Gyro Z: \t"); // Linha 6
+  Serial.println("Mag X: "); // Linha 7
+  Serial.println("Mag Y:"); // Linha 8
+  Serial.println("Mag Z"); // Linha 9
+  Serial.println("Temperatura NTC: "); // Linha 10
+  Serial.println("Nível da bateria: "); // Linha 11
+  Serial.println("SG X: "); // Linha 12
+  Serial.println("SG Y: "); // Linha 13
+  Serial.println("SG Z: "); // Linha 14
+
+  // Recebe os dados do NRF24L01
+  if (receiveData()) {
+    // Exibe os dados recebidos no display
+    
+    display.clear();
+    display.drawString(0, 0, "Accel X: " + String((int16_t)(receivedData[0] << 8 | receivedData[1])));
+    display.drawString(0, 10, "Accel Y: " + String((int16_t)(receivedData[2] << 8 | receivedData[3])));
+    display.drawString(0, 20, "Accel Z: " + String((int16_t)(receivedData[4] << 8 | receivedData[5])));
+    display.drawString(0, 30, "Gyro X: " + String((int16_t)(receivedData[6] << 8 | receivedData[7])));
+    display.drawString(0, 40, "Gyro Y: " + String((int16_t)(receivedData[8] << 8 | receivedData[9])));
+    display.drawString(0, 50, "Gyro Z: " + String((int16_t)(receivedData[10] << 8 | receivedData[11])));
+    display.drawString(0, 60, "Mag X: " + String((int16_t)(receivedData[12] << 8 | receivedData[13])));
+    display.drawString(0, 70, "Mag Y: " + String((int16_t)(receivedData[14] << 8 | receivedData[15])));
+    display.drawString(0, 80, "Mag Z: " + String((int16_t)(receivedData[16] << 8 | receivedData[17])));
+    //display.drawString(0, 90, "Temp MPU: " + String((int16_t)(receivedData[18] << 8 | receivedData[19])));
+    display.drawString(0, 90, "Temp NTC: " + String((int16_t)(receivedData[20] << 8 | receivedData[21])));
+    display.drawString(0, 100, "Bateria: " + String((int16_t)(receivedData[22] << 8 | receivedData[23])));
+    //display.drawString(0, 120, "SG X: " + String((int16_t)(receivedData[24] << 8 | receivedData[25])));
+    //display.drawString(0, 130, "SG Y: " + String((int16_t)(receivedData[26] << 8 | receivedData[27])));
+    //display.drawString(0, 140, "SG Z: " + String((int16_t)(receivedData[28] << 8 | receivedData[29])));
+    display.display();
   }
-  
-  radio.openReadingPipe(0, address);
-  radio.startListening();
-  
-  // Configura a interrupção no pino IRQ
-  attachInterrupt(digitalPinToInterrupt(IRQ_PIN), handleIRQ, FALLING);
-  
-  Heltec.display->clear();
-  Heltec.display->drawString(0, 0, "NRF24L01 OK!");
-  Heltec.display->display();
+
+  if (digitalRead(BUTTON_PIN) == LOW) {
+    digitalWrite(LED_PIN, HIGH);  // Acende o LED
+    if (buttonActive == false) {
+      buttonActive = true;
+      buttonPressTime = millis();
+    }
+    if ((millis() - buttonPressTime > 1000) && (longPressActive == false)) {
+      longPressActive = true;
+      sendCommand(0x02);
+      Serial.println("Enviando comando 0x02");  // Comando de pressionamento longo
+        display.clear();
+        display.drawString(0, 0, "Comando: ");  // Linha 1
+        display.drawString(0, 10, "0x02");  // Linha 2
+        // Atualiza o display com o conteúdo desenhado
+        display.display();
+    }
+  } else {
+    digitalWrite(LED_PIN, LOW);  // Apaga o LED
+    if (buttonActive == true) {
+      if (longPressActive == true) {
+        longPressActive = false;
+      } else {
+        sendCommand(0x01);
+        Serial.println("Enviando comando 0x01");  // Comando de pressionamento curto
+        display.clear();
+        display.drawString(0, 0, "Comando: ");  // Linha 1
+        display.drawString(0, 10, "0x01");  // Linha 2
+        // Atualiza o display com o conteúdo desenhado
+        display.display();
+      }
+      buttonActive = false;
+      
+    }
+  }
+  // Aguarda um pouco antes de repetir
   delay(1000);
 }
 
-void loop() {
-  // Verifica se há dados recebidos via interrupção
-  if (dataReceived) {
-    dataReceived = false; // Reseta a flag
-    uint8_t rxBuffer[30];
-    bool txFail, rxFail, rxReady;
-    radio.whatHappened(txFail, rxFail, rxReady); // Verifica o status do NRF24L01
+void initNRF24L01() {
+  // Inicializa o NRF24L01
+  if (!radio.begin()) {
+    Serial.println("NRF24L01 não encontrado!");
+    display.clear();
+    display.drawString(0, 0, "NRF24L01");  // Linha 1
+    display.drawString(0, 10, "não encontrado!");  // Linha 2
+    // Atualiza o display com o conteúdo desenhado
+    display.display();
+    delay(3000);
     
-    if (rxReady) { // Se dados foram recebidos
-      radio.read(&rxBuffer, sizeof(rxBuffer));
-      
-      // Processa os dados recebidos
-      float mpuAcelX = ((rxBuffer[0] << 8) | rxBuffer[1]) / 100.0;
-      float mpuAcelY = ((rxBuffer[2] << 8) | rxBuffer[3]) / 100.0;
-      float mpuAcelZ = ((rxBuffer[4] << 8) | rxBuffer[5]) / 100.0;
-      float mpuGiroX = ((rxBuffer[6] << 8) | rxBuffer[7]) / 100.0;
-      float mpuGiroY = ((rxBuffer[8] << 8) | rxBuffer[9]) / 100.0;
-      float mpuGiroZ = ((rxBuffer[10] << 8) | rxBuffer[11]) / 100.0;
-      float mpuMagX = ((rxBuffer[12] << 8) | rxBuffer[13]) / 100.0;
-      float mpuMagY = ((rxBuffer[14] << 8) | rxBuffer[15]) / 100.0;
-      float mpuMagZ = ((rxBuffer[16] << 8) | rxBuffer[17]) / 100.0;
-      float mpuTemp = ((rxBuffer[18] << 8) | rxBuffer[19]) / 100.0;
-      float ntcTemp = ((rxBuffer[20] << 8) | rxBuffer[21]) / 100.0;
-      float batVolt = ((rxBuffer[22] << 8) | rxBuffer[23]) / 100.0;
-      float sgX = ((rxBuffer[24] << 8) | rxBuffer[25]) / 100.0;
-      float sgY = ((rxBuffer[26] << 8) | rxBuffer[27]) / 100.0;
-      float sgZ = ((rxBuffer[28] << 8) | rxBuffer[29]) / 100.0;
-      
+    display.clear();
+  } else{
 
-      // Exibe os dados no monitor serial
-      Serial.print("mpuAcelX: "); Serial.println(mpuAcelX);
-      Serial.print("mpuAcelY: "); Serial.println(mpuAcelY);
-      Serial.print("mpuAcelZ: "); Serial.println(mpuAcelZ);
-      Serial.print("mpuGiroX: "); Serial.println(mpuGiroX);
-      Serial.print("mpuGiroY: "); Serial.println(mpuGiroY);
-      Serial.print("mpuGiroZ: "); Serial.println(mpuGiroZ);
-      Serial.print("mpuMagX: "); Serial.println(mpuMagX);
-      Serial.print("mpuMagY: "); Serial.println(mpuMagY);
-      Serial.print("mpuMagZ: "); Serial.println(mpuMagZ);
-      Serial.print("mpuTemp: "); Serial.println(mpuTemp);
-      Serial.print("ntcTemp: "); Serial.println(ntcTemp);
-      Serial.print("batVolt: "); Serial.println(batVolt);
-      Serial.print("sgX: "); Serial.println(sgX);
-      Serial.print("sgY: "); Serial.println(sgY);
-      Serial.print("sgZ: "); Serial.println(sgZ);
+    // Configura o endereço do pipe 0
+    radio.openReadingPipe(0, address);
 
-      // Exibe os dados no LCD alguns dos dados
-      Heltec.display->clear();
-      Heltec.display->drawString(0, 0, "mpuAcelX: " + String(mpuAcelX));
-      Heltec.display->drawString(0, 10, "mpuAcelY: " + String(mpuAcelY));
-      Heltec.display->drawString(0, 20, "mpuAcelZ: " + String(mpuAcelZ));
-      Heltec.display->drawString(0, 30, "mpuGiroX: " + String(mpuGiroX));
-      Heltec.display->drawString(0, 40, "mpuGiroY: " + String(mpuGiroY));
-      Heltec.display->drawString(0, 50, "mpuGiroZ: " + String(mpuGiroZ));
-      Heltec.display->drawString(0, 60, "ntcTemp: " + String(ntcTemp));
-      Heltec.display->drawString(0, 70, "batVolt: " + String(batVolt));
-      Heltec.display->display();
-    }
-    // Verifica o estado do botão
-    if (digitalRead(BUTTON_PIN) == LOW) {
-      if (buttonActive == false) {
-        buttonActive = true;
-        buttonPressTime = millis();
-      }
-      if ((millis() - buttonPressTime > 2000) && (longPressActive == false)) {
-        longPressActive = true;
-        sendCommand(0x02);
-      }
-    } 
-    else {
-      if (buttonActive == true) {
-        if (longPressActive == true) {
-          longPressActive = false;
-        } else {
-          sendCommand(0x01);
-        }
-        buttonActive = false;
-      }
-    }
+    // Configura a potência do transmissor (RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX)
+    radio.setPALevel(RF24_PA_LOW);
+
+    // Configura a taxa de transmissão (RF24_250KBPS, RF24_1MBPS, RF24_2MBPS)
+    radio.setDataRate(RF24_250KBPS);
+
+    // Configura o canal de comunicação (0-125)
+    radio.setChannel(76);
+
+    // Habilita o modo de recepção
+    radio.startListening();
+
+    Serial.println("NRF24L01 inicializado com sucesso!");
+    display.clear();
+    display.drawString(0, 0, "NRF24L01");  // Linha 1
+    display.drawString(0, 10, "inicializado!");  // Linha 2
+    // Atualiza o display com o conteúdo desenhado
+    display.display();
+    delay(1000);
   }
 }
 
-void sendCommand(uint8_t command) {
-  radio.stopListening();
-  radio.openWritingPipe(address);
-  radio.write(&command, sizeof(command));
-  radio.startListening();
+bool receiveData() {
+  if (radio.available()) {
+    // Lê os dados recebidos
+    radio.read(&receivedData, sizeof(receivedData));
+    dataReceived = true;
+    return true;
+  }
   
-  Serial.print("Command sent: 0x");
-  Serial.println(command, HEX);
+  dataReceived = false;
+  return false;
+}
+
+void sendCommand(uint8_t command) {
+  // Para enviar um comando, primeiro paramos de ouvir
+  radio.stopListening();
+
+  // Abrimos o pipe de escrita com o mesmo endereço
+  radio.openWritingPipe(address);
+
+  // Enviamos o comando
+  bool result = radio.write(&command, sizeof(command));
+
+  // Voltamos a ouvir
+  radio.startListening();
+
+  if (result) {
+    Serial.println("Comando enviado com sucesso!");
+    display.clear();
+    display.drawString(0, 0, "Comando");  // Linha 1
+    display.drawString(0, 10, "enviado!");  // Linha 2
+    // Atualiza o display com o conteúdo desenhado
+    display.display();
+    delay(1000);
+  } else {
+    Serial.println("Falha ao enviar comando!");
+    display.clear();
+    display.drawString(0, 0, "Comando");  // Linha 1
+    display.drawString(0, 10, "não enviado!");  // Linha 2
+    // Atualiza o display com o conteúdo desenhado
+    display.display();
+    delay(1000);
+  }
 }

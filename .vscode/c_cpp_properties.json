@@ -10,6 +10,7 @@
             "includePath": [
                 "C:/Users/diogo/OneDrive/Documentos/PlatformIO/Projects/gateway/include",
                 "C:/Users/diogo/OneDrive/Documentos/PlatformIO/Projects/gateway/src",
+                "C:/Users/diogo/OneDrive/Documentos/PlatformIO/Projects/gateway/.pio/libdeps/heltec_wifi_lora_32_V2/U8g2/src",
                 "C:/Users/diogo/OneDrive/Documentos/PlatformIO/Projects/gateway/.pio/libdeps/heltec_wifi_lora_32_V2/RadioLib/src",
                 "C:/Users/diogo/OneDrive/Documentos/PlatformIO/Projects/gateway/.pio/libdeps/heltec_wifi_lora_32_V2/RF24",
                 "C:/Users/diogo/OneDrive/Documentos/PlatformIO/Projects/gateway/.pio/libdeps/heltec_wifi_lora_32_V2/RF24/utility",
@@ -252,6 +253,7 @@
                 "path": [
                     "C:/Users/diogo/OneDrive/Documentos/PlatformIO/Projects/gateway/include",
                     "C:/Users/diogo/OneDrive/Documentos/PlatformIO/Projects/gateway/src",
+                    "C:/Users/diogo/OneDrive/Documentos/PlatformIO/Projects/gateway/.pio/libdeps/heltec_wifi_lora_32_V2/U8g2/src",
                     "C:/Users/diogo/OneDrive/Documentos/PlatformIO/Projects/gateway/.pio/libdeps/heltec_wifi_lora_32_V2/RadioLib/src",
                     "C:/Users/diogo/OneDrive/Documentos/PlatformIO/Projects/gateway/.pio/libdeps/heltec_wifi_lora_32_V2/RF24",
                     "C:/Users/diogo/OneDrive/Documentos/PlatformIO/Projects/gateway/.pio/libdeps/heltec_wifi_lora_32_V2/RF24/utility",

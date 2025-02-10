@@ -143,4 +143,11 @@
  .pio/libdeps/heltec_wifi_lora_32_V2/Heltec\ ESP32\ Dev-Boards/src/lora/LoRa.h \
  .pio/libdeps/heltec_wifi_lora_32_V2/RF24/nRF24L01.h \
  .pio/libdeps/heltec_wifi_lora_32_V2/RF24/RF24.h \
- .pio/libdeps/heltec_wifi_lora_32_V2/RF24/RF24_config.h
+ .pio/libdeps/heltec_wifi_lora_32_V2/RF24/RF24_config.h \
+ .pio/libdeps/heltec_wifi_lora_32_V2/Heltec\ ESP32\ Dev-Boards/src/HT_SSD1306Wire.h \
+ .pio/libdeps/heltec_wifi_lora_32_V2/U8g2/src/U8g2lib.h \
+ C:/Users/diogo/.platformio/packages/framework-arduinoespressif32/cores/esp32/Print.h \
+ .pio/libdeps/heltec_wifi_lora_32_V2/U8g2/src/U8x8lib.h \
+ .pio/libdeps/heltec_wifi_lora_32_V2/U8g2/src/clib/u8x8.h \
+ .pio/libdeps/heltec_wifi_lora_32_V2/U8g2/src/clib/u8g2.h \
+ .pio/libdeps/heltec_wifi_lora_32_V2/U8g2/src/clib/u8x8.h
