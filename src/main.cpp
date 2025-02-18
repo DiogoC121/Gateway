@@ -5,18 +5,22 @@
 
 // Inicializa o objeto SSD1306Wire para o display OLED da Heltec V2 LoRa
 // Endereço I2C: 0x3C, Pinos SDA: 4, SCL: 15
-// Endereço de comunicação (deve ser o mesmo no dispositivo)
-const byte address[6] = "00001";
-//const byte address[5] = {0x52, 0x52, 0xE1, 0xAB, 0x12}; // "node3"
+// Endereço de comunicação (deve ser o mesmo no dispositivo sensor)
+
+const uint64_t ADDRESS = 0xE8E8F0F0E1LL;
+#define BUFFER_SIZE 16 // MAX 32 int16_t // 32 bytes max - accel = 0,1,2, gyro = 3,4,5, mag = 6,7,8, tempmpu = 9,temntc = 10, tempsens = 11, bat = 12, sg = 13, 14, 15, erro = 16
+#define CHANNEL 66
 
 #define BUTTON_PIN    13
 #define LED_PIN       25 
 #define CE_PIN        12
 #define CSN_PIN       17
 #define IRQ_PIN       2 
-#define nrsck         5
-#define nfmiso        19
-#define nrmosi        23
+#define NRFSCK        5
+#define NRFMISO       19
+#define NRFMOSI       23
+//#define Vext 21 // Pino Vext no Heltec LoRa V2
+
 
 static SSD1306Wire  display(0x3c, 500000, SDA_OLED, SCL_OLED, GEOMETRY_128_64, RST_OLED); // addr , freq , i2c group , resolution , rst
 
@@ -25,11 +29,10 @@ unsigned long buttonPressTime = 0;
 bool buttonActive = false;
 bool longPressActive = false;
 
-// Array para armazenar os dados recebidos
-uint16_t receivedData[30] = {0};
-
 // Inicializa o objeto RF24
 RF24 radio(CE_PIN, CSN_PIN);
+int16_t rx_buffer[BUFFER_SIZE];
+int16_t tx_buffer[1] = {0x00};
 
 void VextON(void)
 {
@@ -81,7 +84,7 @@ void setup() {
 
   delay(3000);
   
-  SPI.begin(nrsck, nfmiso, nrmosi);
+  SPI.begin(NRFSCK, NRFMISO, NRFMOSI);
 
   // Inicializa o NRF24L01
   initNRF24L01();
@@ -113,41 +116,44 @@ void loop() {
   display.display();
 
   // Escreve no monitor serial
-  Serial.println("Accel X: ");  // Linha 1
-  Serial.println("Accel Y: "); // Linha 2
-  Serial.println("Accel Z: "); // Linha 3
-  Serial.println("Gyro X: "); // Linha 4
-  Serial.println("Gyro Y: "); // Linha 5
-  Serial.println("Gyro Z: \t"); // Linha 6
-  Serial.println("Mag X: "); // Linha 7
-  Serial.println("Mag Y:"); // Linha 8
-  Serial.println("Mag Z"); // Linha 9
-  Serial.println("Temperatura NTC: "); // Linha 10
-  Serial.println("Nível da bateria: "); // Linha 11
-  Serial.println("SG X: "); // Linha 12
-  Serial.println("SG Y: "); // Linha 13
-  Serial.println("SG Z: "); // Linha 14
+  Serial.println("Accel X: " + String((int16_t)(rx_buffer[0])));  // Linha 1
+  Serial.println("Accel Y: " + String((int16_t)(rx_buffer[1]))); // Linha 2
+  Serial.println("Accel Z: " + String((int16_t)(rx_buffer[2]))); // Linha 3
+  Serial.println("Gyro X: " + String((int16_t)(rx_buffer[3]))); // Linha 4
+  Serial.println("Gyro Y: " + String((int16_t)(rx_buffer[4]))); // Linha 5
+  Serial.println("Gyro Z: " + String((int16_t)(rx_buffer[5]))); // Linha 6
+  Serial.println("Mag X: " + String((int16_t)(rx_buffer[6]))); // Linha 7
+  Serial.println("Mag Y: " + String((int16_t)(rx_buffer[7]))); // Linha 8
+  Serial.println("Mag Z: " + String((int16_t)(rx_buffer[8]))); // Linha 9
+  Serial.println("Temperatura MPU9250: " + String((int16_t)(rx_buffer[9]))); // Linha 10
+  Serial.println("Temperatura NTC: " + String((int16_t)(rx_buffer[10]))); // Linha 11
+  Serial.println("Nível da bateria: " + String((int16_t)(rx_buffer[11]))); // Linha 12
+  Serial.println("SG X: " + String((int16_t)(rx_buffer[12]))); // Linha 13
+  Serial.println("SG Y: " + String((int16_t)(rx_buffer[13]))); // Linha 14
+  Serial.println("SG Z: "+ String((int16_t)(rx_buffer[14]))); // Linha 15
+  Serial.println("ERRO: "+ String((int16_t)(rx_buffer[15]))); // Linha 16
 
   // Recebe os dados do NRF24L01
   if (receiveData()) {
     // Exibe os dados recebidos no display
     
     display.clear();
-    display.drawString(0, 0, "Accel X: " + String((int16_t)(receivedData[0] << 8 | receivedData[1])));
-    display.drawString(0, 10, "Accel Y: " + String((int16_t)(receivedData[2] << 8 | receivedData[3])));
-    display.drawString(0, 20, "Accel Z: " + String((int16_t)(receivedData[4] << 8 | receivedData[5])));
-    display.drawString(0, 30, "Gyro X: " + String((int16_t)(receivedData[6] << 8 | receivedData[7])));
-    display.drawString(0, 40, "Gyro Y: " + String((int16_t)(receivedData[8] << 8 | receivedData[9])));
-    display.drawString(0, 50, "Gyro Z: " + String((int16_t)(receivedData[10] << 8 | receivedData[11])));
-    display.drawString(0, 60, "Mag X: " + String((int16_t)(receivedData[12] << 8 | receivedData[13])));
-    display.drawString(0, 70, "Mag Y: " + String((int16_t)(receivedData[14] << 8 | receivedData[15])));
-    display.drawString(0, 80, "Mag Z: " + String((int16_t)(receivedData[16] << 8 | receivedData[17])));
-    //display.drawString(0, 90, "Temp MPU: " + String((int16_t)(receivedData[18] << 8 | receivedData[19])));
-    display.drawString(0, 90, "Temp NTC: " + String((int16_t)(receivedData[20] << 8 | receivedData[21])));
-    display.drawString(0, 100, "Bateria: " + String((int16_t)(receivedData[22] << 8 | receivedData[23])));
-    //display.drawString(0, 120, "SG X: " + String((int16_t)(receivedData[24] << 8 | receivedData[25])));
-    //display.drawString(0, 130, "SG Y: " + String((int16_t)(receivedData[26] << 8 | receivedData[27])));
-    //display.drawString(0, 140, "SG Z: " + String((int16_t)(receivedData[28] << 8 | receivedData[29])));
+    display.drawString(0, 0, "Accel X: " + String((int16_t)(rx_buffer[0])));
+    display.drawString(0, 10, "Accel Y: " + String((int16_t)(rx_buffer[1])));
+    display.drawString(0, 20, "Accel Z: " + String((int16_t)(rx_buffer[2])));
+    display.drawString(0, 30, "Gyro X: " + String((int16_t)(rx_buffer[3])));
+    display.drawString(0, 40, "Gyro Y: " + String((int16_t)(rx_buffer[4])));
+    display.drawString(0, 50, "Gyro Z: " + String((int16_t)(rx_buffer[5])));
+    display.drawString(0, 60, "Mag X: " + String((int16_t)(rx_buffer[6])));
+    display.drawString(0, 70, "Mag Y: " + String((int16_t)(rx_buffer[7])));
+    display.drawString(0, 80, "Mag Z: " + String((int16_t)(rx_buffer[8])));
+    //display.drawString(0, 90, "Temp MPU: " + String((int16_t)(rx_buffer[9])));
+    display.drawString(0, 90, "Temp NTC: " + String((int16_t)(rx_buffer[10])));
+    display.drawString(0, 100, "Bateria: " + String((int16_t)(rx_buffer[11])));
+    //display.drawString(0, 120, "SG X: " + String((int16_t)(rx_buffer[12])));
+    //display.drawString(0, 130, "SG Y: " + String((int16_t)(rx_buffer[13])));
+    //display.drawString(0, 140, "SG Z: " + String((int16_t)(rx_buffer[14])));
+    //display.drawString(0, 150, "ERRO: " + String((int16_t)(rx_buffer[15])));
     display.display();
   }
 
@@ -159,7 +165,7 @@ void loop() {
     }
     if ((millis() - buttonPressTime > 1000) && (longPressActive == false)) {
       longPressActive = true;
-      sendCommand(0x02);
+      sendCommand(2);
       Serial.println("Enviando comando 0x02");  // Comando de pressionamento longo
         display.clear();
         display.drawString(0, 0, "Comando: ");  // Linha 1
@@ -173,7 +179,7 @@ void loop() {
       if (longPressActive == true) {
         longPressActive = false;
       } else {
-        sendCommand(0x01);
+        sendCommand(1);
         Serial.println("Enviando comando 0x01");  // Comando de pressionamento curto
         display.clear();
         display.drawString(0, 0, "Comando: ");  // Linha 1
@@ -191,47 +197,61 @@ void loop() {
 
 void initNRF24L01() {
   // Inicializa o NRF24L01
-  if (!radio.begin()) {
-    Serial.println("NRF24L01 não encontrado!");
-    display.clear();
-    display.drawString(0, 0, "NRF24L01");  // Linha 1
-    display.drawString(0, 10, "não encontrado!");  // Linha 2
-    // Atualiza o display com o conteúdo desenhado
-    display.display();
-    delay(3000);
-    
-    display.clear();
-  } else{
-
-    // Configura o endereço do pipe 0
-    radio.openReadingPipe(0, address);
-
-    // Configura a potência do transmissor (RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX)
-    radio.setPALevel(RF24_PA_LOW);
-
-    // Configura a taxa de transmissão (RF24_250KBPS, RF24_1MBPS, RF24_2MBPS)
-    radio.setDataRate(RF24_250KBPS);
-
-    // Configura o canal de comunicação (0-125)
-    radio.setChannel(76);
-
-    // Habilita o modo de recepção
-    radio.startListening();
-
-    Serial.println("NRF24L01 inicializado com sucesso!");
-    display.clear();
-    display.drawString(0, 0, "NRF24L01");  // Linha 1
-    display.drawString(0, 10, "inicializado!");  // Linha 2
-    // Atualiza o display com o conteúdo desenhado
-    display.display();
-    delay(1000);
+  //new:
+    radio.begin();
+    if (!radio.begin()) {
+      Serial.println("NRF24L01 não encontrado!");
+      display.clear();
+      display.drawString(0, 0, "NRF24L01");  // Linha 1
+      display.drawString(0, 10, "não encontrado!");  // Linha 2
+      // Atualiza o display com o conteúdo desenhado
+      display.display();
+      delay(500);
+      display.clear();
+      for (int i = 0; i<10; i++){
+        radio.begin();
+        if (!radio.begin()) {
+          Serial.println("NRF24L01 não encontrado!");
+          display.clear();
+          display.drawString(0, 0, "NRF24L01");  // Linha 1
+          display.drawString(0, 10, "não encontrado!");  // Linha 2
+          display.drawString(0, 20, "Tentativa: " + String(i));  // Linha 3
+          // Atualiza o display com o conteúdo desenhado
+          display.display();
+          delay(1000);
+          display.clear();
+        }else{
+          break;
+        }
+      }
+    } 
+    if (radio.begin()) {
+      radio.setChannel(CHANNEL); // Canal 76 (0-125)
+      radio.setDataRate(RF24_1MBPS); // Taxa de dados de 1 Mbps (RF24_250KBPS, RF24_1MBPS, RF24_2MBPS)
+      radio.setPALevel(RF24_PA_MAX); // Nível de potência mínimo (RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX)
+      radio.setCRCLength(RF24_CRC_16); // CRC de 2 bytes
+      radio.openReadingPipe(0, ADDRESS); // Abre o pipe de leitura
+      radio.openWritingPipe(ADDRESS); // Abre o pipe de escrita
+      radio.setPayloadSize(30); // Tamanho do payload para o buffer de 30 bytes
+      radio.startListening(); // Inicia no modo RX
+      
+      Serial.println("NRF24L01 inicializado com sucesso!");
+      display.clear();
+      display.drawString(0, 0, "NRF24L01");  // Linha 1
+      display.drawString(0, 10, "inicializado!");  // Linha 2
+      // Atualiza o display com o conteúdo desenhado
+      display.display();
+      delay(1000);
+    }
   }
-}
 
 bool receiveData() {
   if (radio.available()) {
-    // Lê os dados recebidos
-    radio.read(&receivedData, sizeof(receivedData));
+    radio.read(&rx_buffer, sizeof(rx_buffer));
+      Serial.println("Dados recebidos:");
+      for (int i = 0; i < BUFFER_SIZE; i++) {
+          Serial.println(rx_buffer[i]);
+      }
     dataReceived = true;
     return true;
   }
@@ -240,17 +260,11 @@ bool receiveData() {
   return false;
 }
 
-void sendCommand(uint8_t command) {
-  // Para enviar um comando, primeiro paramos de ouvir
+void sendCommand(int16_t command) {
+  
+  tx_buffer[0] = {command};
   radio.stopListening();
-
-  // Abrimos o pipe de escrita com o mesmo endereço
-  radio.openWritingPipe(address);
-
-  // Enviamos o comando
   bool result = radio.write(&command, sizeof(command));
-
-  // Voltamos a ouvir
   radio.startListening();
 
   if (result) {

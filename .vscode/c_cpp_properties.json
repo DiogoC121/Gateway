@@ -493,7 +493,7 @@
                 ]
             },
             "defines": [
-                "PLATFORMIO=60116",
+                "PLATFORMIO=60117",
                 "ARDUINO_HELTEC_WIFI_LORA_32_V2",
                 "CORE_DEBUG_LEVEL=5",
                 "SLOW_CLK_TPYE=0",
